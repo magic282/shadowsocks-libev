@@ -85,6 +85,7 @@ int vpn        = 0;
 uint64_t tx    = 0;
 uint64_t rx    = 0;
 ev_tstamp last = 0;
+char *prefix;
 #endif
 
 static int acl  = 0;
@@ -170,6 +171,10 @@ int create_and_bind(const char *addr, const char *port)
 #ifdef SO_NOSIGPIPE
         setsockopt(listen_sock, SOL_SOCKET, SO_NOSIGPIPE, &opt, sizeof(opt));
 #endif
+        int err = set_reuseport(listen_sock);
+        if (err == 0) {
+            LOGI("tcp port reuse enabled");
+        }
 
         s = bind(listen_sock, rp->ai_addr, rp->ai_addrlen);
         if (s == 0) {
@@ -194,10 +199,8 @@ int create_and_bind(const char *addr, const char *port)
 
 static void free_connections(struct ev_loop *loop)
 {
-    struct cork_dllist_item *curr;
-    for (curr = cork_dllist_start(&connections);
-         !cork_dllist_is_end(&connections, curr);
-         curr = curr->next) {
+    struct cork_dllist_item *curr, *next;
+    cork_dllist_foreach_void (&connections, curr, next) {
         server_t *server = cork_container_of(curr, server_t, entries);
         remote_t *remote = server->remote;
         close_and_free_server(loop, server);
@@ -992,7 +995,7 @@ int main(int argc, char **argv)
     USE_TTY();
 
 #ifdef ANDROID
-    while ((c = getopt_long(argc, argv, "f:s:p:l:k:t:m:i:c:b:a:n:uvVA",
+    while ((c = getopt_long(argc, argv, "f:s:p:l:k:t:m:i:c:b:a:n:P:uvVA",
                             long_options, &option_index)) != -1) {
 #else
     while ((c = getopt_long(argc, argv, "f:s:p:l:k:t:m:i:c:b:a:n:uvA",
@@ -1061,6 +1064,9 @@ int main(int argc, char **argv)
 #ifdef ANDROID
         case 'V':
             vpn = 1;
+            break;
+        case 'P':
+            prefix = optarg;
             break;
 #endif
         }
@@ -1273,6 +1279,7 @@ int start_ss_local_server(profile_t profile)
     int local_port    = profile.local_port;
     int timeout       = profile.timeout;
 
+    auth      = profile.auth;
     mode      = profile.mode;
     fast_open = profile.fast_open;
     verbose   = profile.verbose;

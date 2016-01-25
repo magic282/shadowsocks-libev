@@ -87,6 +87,7 @@ static void close_and_free_server(EV_P_ server_t *server);
 
 #ifdef ANDROID
 int vpn = 0;
+char *prefix;
 #endif
 int verbose = 0;
 
@@ -148,6 +149,10 @@ int create_and_bind(const char *addr, const char *port)
 #ifdef SO_NOSIGPIPE
         setsockopt(listen_sock, SOL_SOCKET, SO_NOSIGPIPE, &opt, sizeof(opt));
 #endif
+        int err = set_reuseport(listen_sock);
+        if (err == 0) {
+            LOGI("tcp port reuse enabled");
+        }
 
         s = bind(listen_sock, rp->ai_addr, rp->ai_addrlen);
         if (s == 0) {
@@ -696,7 +701,7 @@ int main(int argc, char **argv)
     USE_TTY();
 
 #ifdef ANDROID
-    while ((c = getopt(argc, argv, "f:s:p:l:k:t:m:i:c:b:L:a:n:uUvVA")) != -1) {
+    while ((c = getopt(argc, argv, "f:s:p:l:k:t:m:i:c:b:L:a:n:P:uUvVA")) != -1) {
 #else
     while ((c = getopt(argc, argv, "f:s:p:l:k:t:m:i:c:b:L:a:n:uUvA")) != -1) {
 #endif
@@ -761,6 +766,9 @@ int main(int argc, char **argv)
 #ifdef ANDROID
         case 'V':
             vpn = 1;
+            break;
+        case 'P':
+            prefix = optarg;
             break;
 #endif
         }
